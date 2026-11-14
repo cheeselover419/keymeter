@@ -1,0 +1,11 @@
+# сертификат и связка ключей для подписи
+signing/
+
+# сборка
+KeyMeter.app/
+
+# Claude
+CLAUDE.md
+.claude/
+
+.DS_Store
