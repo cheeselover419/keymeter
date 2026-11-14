@@ -3,6 +3,10 @@ signing/
 
 # сборка
 KeyMeter.app/
+build/
+
+# Xcode
+xcuserdata/
 
 # Claude
 CLAUDE.md
