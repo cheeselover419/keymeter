@@ -202,11 +202,9 @@ private func showAbout() {
         .foregroundColor: NSColor.labelColor,
         .paragraphStyle: center,
     ]
-    let credits = NSMutableAttributedString(
-        string: "Считает нажатия клавиш и путь курсора в метрах.\n\nРазработчик: cheeselover419\n", attributes: base)
     var link = base
     link[.link] = URL(string: "https://github.com/cheeselover419")!
-    credits.append(NSAttributedString(string: "github.com/cheeselover419", attributes: link))
+    let credits = NSAttributedString(string: "github.com/cheeselover419", attributes: link)
 
     NSApp.activate(ignoringOtherApps: true)
     NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
