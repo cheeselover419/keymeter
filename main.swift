@@ -122,7 +122,7 @@ struct KeyMeterApp: App {
     @StateObject private var stats = Stats()
 
     var body: some Scene {
-        MenuBarExtra("KeyMeter", systemImage: "keyboard") {
+        MenuBarExtra("KeyMeter", systemImage: "ruler") {
             StatsView(stats: stats)
         }
         .menuBarExtraStyle(.window)
@@ -157,8 +157,8 @@ struct StatsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                row("Клавиши", stats.today.keys.formatted(), stats.total.keys.formatted())
-                row("Клики", stats.today.clicks.formatted(), stats.total.clicks.formatted())
+                row("Клавиши", count(stats.today.keys), count(stats.total.keys))
+                row("Клики", count(stats.today.clicks), count(stats.total.clicks))
                 row("Курсор", distance(stats.today.meters), distance(stats.total.meters))
             }
             .monospacedDigit()
@@ -185,6 +185,12 @@ struct StatsView: View {
             Text(today)
             Text(total)
         }
+    }
+
+    private func count(_ n: Int) -> String {
+        n < 1_000_000
+            ? n.formatted()
+            : (Double(n) / 1_000_000).formatted(.number.precision(.fractionLength(2))) + " млн"
     }
 
     private func distance(_ m: Double) -> String {
