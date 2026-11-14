@@ -155,7 +155,7 @@ struct StatsView: View {
                 Divider()
             }
 
-            Grid(alignment: .trailing, horizontalSpacing: 24, verticalSpacing: 10) {
+            Grid(alignment: .trailing, horizontalSpacing: 16, verticalSpacing: 10) {
                 GridRow {
                     Color.clear.frame(maxWidth: .infinity, maxHeight: 1).gridColumnAlignment(.leading)
                     Text("Today")
@@ -181,11 +181,12 @@ struct StatsView: View {
                     .keyboardShortcut("q")
             }
             .buttonStyle(.plain)
+            .lineLimit(1)
             .font(.caption)
             .foregroundStyle(.secondary)
         }
         .padding(16)
-        .frame(width: 280)
+        .frame(width: 250)
     }
 
     private func row(_ icon: String, _ today: String, _ total: String) -> some View {
