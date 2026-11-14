@@ -51,6 +51,12 @@ final class Stats: ObservableObject {
         return "\(c.year!)-\(c.month!)-\(c.day!)"
     }
 
+    func reset() {
+        total = Counts()
+        today = Counts()
+        save()
+    }
+
     func save() {
         // новый день — обнуляем сегодняшнюю статистику
         let now = Stats.dayKey()
@@ -132,16 +138,15 @@ struct KeyMeterApp: App {
 
 struct StatsView: View {
     @ObservedObject var stats: Stats
-    @State private var autostart = SMAppService.mainApp.status == .enabled
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if !stats.hasAccess {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Нет доступа к мониторингу ввода")
-                    Text("Выдайте доступ и перезапустите KeyMeter")
+                    Text("No Input Monitoring access")
+                    Text("Grant access and restart KeyMeter")
                         .foregroundStyle(.secondary)
-                    Button("Открыть настройки…") {
+                    Button("Open Settings…") {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!)
                     }
                     .buttonStyle(.link)
@@ -153,29 +158,26 @@ struct StatsView: View {
             Grid(alignment: .trailing, horizontalSpacing: 24, verticalSpacing: 10) {
                 GridRow {
                     Color.clear.frame(maxWidth: .infinity, maxHeight: 1).gridColumnAlignment(.leading)
-                    Text("Сегодня")
-                    Text("Всего")
+                    Text("Today")
+                    Text("Total")
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                row("Клавиши", count(stats.today.keys), count(stats.total.keys))
-                row("Клики", count(stats.today.clicks), count(stats.total.clicks))
-                row("Курсор", distance(stats.today.meters), distance(stats.total.meters))
+                row("keyboard", count(stats.today.keys), count(stats.total.keys))
+                row("computermouse", count(stats.today.clicks), count(stats.total.clicks))
+                row("ruler", distance(stats.today.meters), distance(stats.total.meters))
             }
             .monospacedDigit()
 
             Divider()
 
-            Toggle("Запускать при входе", isOn: Binding(get: { autostart }, set: setAutostart))
-                .toggleStyle(.checkbox)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Button("О программе") { showAbout() }
+            HStack(spacing: 14) {
+                Button("About") { showAbout() }
                 Spacer()
-                Button("Выход") { stats.save(); NSApp.terminate(nil) }
+                Button("Settings") { SettingsWindow.show(stats) }
+                    .keyboardShortcut(",")
+                Button("Quit") { stats.save(); NSApp.terminate(nil) }
                     .keyboardShortcut("q")
             }
             .buttonStyle(.plain)
@@ -186,11 +188,53 @@ struct StatsView: View {
         .frame(width: 280)
     }
 
-    private func row(_ title: String, _ today: String, _ total: String) -> some View {
+    private func row(_ icon: String, _ today: String, _ total: String) -> some View {
         GridRow {
-            Text(title).foregroundStyle(.secondary)
+            Image(systemName: icon).foregroundStyle(.secondary).frame(width: 22)
             Text(today)
             Text(total)
+        }
+    }
+
+    private func count(_ n: Int) -> String {
+        n < 1_000_000
+            ? n.formatted()
+            : String(localized: "\((Double(n) / 1_000_000).formatted(.number.precision(.fractionLength(2))))M")
+    }
+
+    private func distance(_ m: Double) -> String {
+        m < 1000
+            ? String(localized: "\(m.formatted(.number.precision(.fractionLength(1)))) m")
+            : String(localized: "\((m / 1000).formatted(.number.precision(.fractionLength(2)))) km")
+    }
+}
+
+struct SettingsView: View {
+    @ObservedObject var stats: Stats
+    @State private var autostart = SMAppService.mainApp.status == .enabled
+    @State private var language = SettingsView.currentLanguage()
+    @State private var confirmReset = false
+
+    var body: some View {
+        Form {
+            Toggle("Launch at login", isOn: Binding(get: { autostart }, set: setAutostart))
+            Picker("Language", selection: Binding(get: { language }, set: setLanguage)) {
+                Text("System").tag("")
+                Text(verbatim: "English").tag("en")
+                Text(verbatim: "Русский").tag("ru")
+            }
+            HStack {
+                Spacer()
+                Button("Reset statistics…", role: .destructive) { confirmReset = true }
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 360)
+        .fixedSize()
+        .confirmationDialog("Reset all statistics?", isPresented: $confirmReset) {
+            Button("Reset", role: .destructive) { stats.reset() }
+        } message: {
+            Text("Today and total counters will be set to zero. This can't be undone.")
         }
     }
 
@@ -199,16 +243,44 @@ struct StatsView: View {
         autostart = SMAppService.mainApp.status == .enabled
     }
 
-    private func count(_ n: Int) -> String {
-        n < 1_000_000
-            ? n.formatted()
-            : (Double(n) / 1_000_000).formatted(.number.precision(.fractionLength(2))) + " млн"
+    // язык самого приложения, а не системы; пустая строка — как в системе
+    static func currentLanguage() -> String {
+        let domain = UserDefaults.standard.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "")
+        return (domain?["AppleLanguages"] as? [String])?.first ?? ""
     }
 
-    private func distance(_ m: Double) -> String {
-        m < 1000
-            ? m.formatted(.number.precision(.fractionLength(1))) + " м"
-            : (m / 1000).formatted(.number.precision(.fractionLength(2))) + " км"
+    private func setLanguage(_ code: String) {
+        guard code != language else { return }
+        language = code
+        if code.isEmpty {
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        } else {
+            UserDefaults.standard.set([code], forKey: "AppleLanguages")
+        }
+        // язык подхватывается только при запуске
+        stats.save()
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        p.arguments = ["-c", "sleep 0.5; open \"$0\"", Bundle.main.bundlePath]
+        try? p.run()
+        NSApp.terminate(nil)
+    }
+}
+
+enum SettingsWindow {
+    private static var window: NSWindow?
+
+    static func show(_ stats: Stats) {
+        if window == nil {
+            let w = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(stats: stats)))
+            w.title = String(localized: "Settings")
+            w.styleMask = [.titled, .closable]
+            w.isReleasedWhenClosed = false
+            w.center()
+            window = w
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        window?.makeKeyAndOrderFront(nil)
     }
 }
 

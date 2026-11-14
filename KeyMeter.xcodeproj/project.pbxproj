@@ -8,12 +8,15 @@
 
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* main.swift */; };
+		A10000000000000000000002 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000001 /* Localizable.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A20000000000000000000001 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000003 /* KeyMeter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KeyMeter.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000004 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		A20000000000000000000005 /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/Localizable.strings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -32,6 +35,7 @@
 			children = (
 				A20000000000000000000001 /* main.swift */,
 				A20000000000000000000002 /* Info.plist */,
+				A90000000000000000000001 /* Localizable.strings */,
 				A40000000000000000000002 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -53,6 +57,7 @@
 			buildPhases = (
 				A30000000000000000000001 /* Sources */,
 				A30000000000000000000002 /* Frameworks */,
+				A30000000000000000000004 /* Resources */,
 				A30000000000000000000003 /* Sign */,
 			);
 			buildRules = (
@@ -76,9 +81,10 @@
 			};
 			buildConfigurationList = A70000000000000000000001 /* Build configuration list for PBXProject "KeyMeter" */;
 			compatibilityVersion = "Xcode 14.0";
-			developmentRegion = ru;
+			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				en,
 				ru,
 				Base,
 			);
@@ -91,6 +97,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A30000000000000000000004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000002 /* Localizable.strings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
 		A30000000000000000000003 /* Sign */ = {
@@ -120,6 +137,18 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		A90000000000000000000001 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				A20000000000000000000004 /* en */,
+				A20000000000000000000005 /* ru */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		A80000000000000000000001 /* Debug */ = {
