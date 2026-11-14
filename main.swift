@@ -26,7 +26,7 @@ struct Counts: Equatable {
 }
 
 final class Stats: ObservableObject {
-    // то, что видит интерфейс; обновляется раз в полсекунды
+    // то, что видит интерфейс; обновляется раз в полсекунды, пока панель открыта
     @Published private(set) var total: Counts
     @Published private(set) var today: Counts
     @Published var hasAccess = false
@@ -35,6 +35,7 @@ final class Stats: ObservableObject {
     private var liveTotal: Counts
     private var liveToday: Counts
     private var displays: [(rect: CGRect, mmPerPoint: Double)] = []
+    private var uiTimer: Timer?
     private var day: String
     private var tap: CFMachPort?
     private var last: CGPoint?
@@ -58,9 +59,17 @@ final class Stats: ObservableObject {
         }
         _ = startTap()
         Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.save() }
-        let ui = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in self?.publish() }
-        ui.tolerance = 0.2
-        RunLoop.main.add(ui, forMode: .common)
+    }
+
+    func setPanelVisible(_ visible: Bool) {
+        uiTimer?.invalidate()
+        uiTimer = nil
+        guard visible else { return }
+        publish()
+        let t = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in self?.publish() }
+        t.tolerance = 0.2
+        RunLoop.main.add(t, forMode: .common)
+        uiTimer = t
     }
 
     private func publish() {
@@ -141,7 +150,8 @@ final class Stats: ObservableObject {
             liveTotal.clicks += 1
             liveToday.clicks += 1
         case .scrollWheel:
-            // сдвиг содержимого в точках, вместе с инерцией трекпада
+            // считаем только движение пальцев или колёсика, без инерции
+            if event.getIntegerValueField(.scrollWheelEventMomentumPhase) != 0 { break }
             let dy = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
             let dx = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
             if let d = displays.first(where: { $0.rect.contains(event.location) }) {
@@ -251,6 +261,8 @@ struct StatsView: View {
         }
         .padding(16)
         .frame(width: 250)
+        .onAppear { stats.setPanelVisible(true) }
+        .onDisappear { stats.setPanelVisible(false) }
     }
 
     private func row(_ icon: String, _ today: String, _ total: String) -> some View {
