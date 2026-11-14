@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreGraphics
+import ServiceManagement
 
 struct Counts {
     var keys = 0
@@ -131,6 +132,7 @@ struct KeyMeterApp: App {
 
 struct StatsView: View {
     @ObservedObject var stats: Stats
+    @State private var autostart = SMAppService.mainApp.status == .enabled
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -165,6 +167,11 @@ struct StatsView: View {
 
             Divider()
 
+            Toggle("Запускать при входе", isOn: Binding(get: { autostart }, set: setAutostart))
+                .toggleStyle(.checkbox)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             HStack {
                 Button("О программе") { showAbout() }
                 Spacer()
@@ -185,6 +192,11 @@ struct StatsView: View {
             Text(today)
             Text(total)
         }
+    }
+
+    private func setAutostart(_ on: Bool) {
+        if on { try? SMAppService.mainApp.register() } else { try? SMAppService.mainApp.unregister() }
+        autostart = SMAppService.mainApp.status == .enabled
     }
 
     private func count(_ n: Int) -> String {
