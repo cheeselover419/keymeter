@@ -6,6 +6,7 @@ struct Counts: Equatable {
     var keys = 0
     var clicks = 0
     var meters = 0.0
+    var scroll = 0.0
 
     init() {}
 
@@ -13,12 +14,14 @@ struct Counts: Equatable {
         keys = d.integer(forKey: prefix + "keys")
         clicks = d.integer(forKey: prefix + "clicks")
         meters = d.double(forKey: prefix + "meters")
+        scroll = d.double(forKey: prefix + "scroll")
     }
 
     func save(_ d: UserDefaults, _ prefix: String) {
         d.set(keys, forKey: prefix + "keys")
         d.set(clicks, forKey: prefix + "clicks")
         d.set(meters, forKey: prefix + "meters")
+        d.set(scroll, forKey: prefix + "scroll")
     }
 }
 
@@ -102,7 +105,7 @@ final class Stats: ObservableObject {
         if tap != nil { return true }
         // без доступа tap создаётся, но видит только события своего окна
         guard CGPreflightListenEventAccess() else { return false }
-        let types: [CGEventType] = [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown, .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
+        let types: [CGEventType] = [.keyDown, .flagsChanged, .leftMouseDown, .rightMouseDown, .otherMouseDown, .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, .scrollWheel]
         let mask = types.reduce(CGEventMask(0)) { $0 | (1 << $1.rawValue) }
         guard let port = CGEvent.tapCreate(
             tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly,
@@ -129,9 +132,23 @@ final class Stats: ObservableObject {
                 liveTotal.keys += 1
                 liveToday.keys += 1
             }
+        case .flagsChanged:
+            if modifierPressed(event) {
+                liveTotal.keys += 1
+                liveToday.keys += 1
+            }
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
             liveTotal.clicks += 1
             liveToday.clicks += 1
+        case .scrollWheel:
+            // сдвиг содержимого в точках, вместе с инерцией трекпада
+            let dy = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
+            let dx = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
+            if let d = displays.first(where: { $0.rect.contains(event.location) }) {
+                let m = hypot(dx, dy) * d.mmPerPoint / 1000
+                liveTotal.scroll += m
+                liveToday.scroll += m
+            }
         default:
             let p = event.location
             if let l = last {
@@ -141,6 +158,26 @@ final class Stats: ObservableObject {
             }
             last = p
         }
+    }
+
+    // модификаторы приходят как flagsChanged и при нажатии, и при отпускании;
+    // по биту конкретной клавиши (левой или правой) понимаем, что её нажали
+    private func modifierPressed(_ e: CGEvent) -> Bool {
+        let mask: UInt64
+        switch e.getIntegerValueField(.keyboardEventKeycode) {
+        case 59: mask = 0x01        // левый control
+        case 62: mask = 0x2000      // правый control
+        case 56: mask = 0x02        // левый shift
+        case 60: mask = 0x04        // правый shift
+        case 55: mask = 0x08        // левый command
+        case 54: mask = 0x10        // правый command
+        case 58: mask = 0x20        // левый option
+        case 61: mask = 0x40        // правый option
+        case 63: mask = CGEventFlags.maskSecondaryFn.rawValue
+        case 57: return true        // caps lock присылает одно событие на нажатие
+        default: return false
+        }
+        return e.flags.rawValue & mask != 0
     }
 
     // переводим точки экрана в миллиметры по физическому размеру дисплея
@@ -193,6 +230,7 @@ struct StatsView: View {
                 row("keyboard", count(stats.today.keys), count(stats.total.keys))
                 row("computermouse", count(stats.today.clicks), count(stats.total.clicks))
                 row("ruler", distance(stats.today.meters), distance(stats.total.meters))
+                row("arrow.up.and.down", distance(stats.today.scroll), distance(stats.total.scroll))
             }
             .monospacedDigit()
 
