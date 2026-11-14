@@ -2,7 +2,7 @@ import SwiftUI
 import CoreGraphics
 import ServiceManagement
 
-struct Counts {
+struct Counts: Equatable {
     var keys = 0
     var clicks = 0
     var meters = 0.0
@@ -23,10 +23,15 @@ struct Counts {
 }
 
 final class Stats: ObservableObject {
-    @Published var total: Counts
-    @Published var today: Counts
+    // то, что видит интерфейс; обновляется раз в полсекунды
+    @Published private(set) var total: Counts
+    @Published private(set) var today: Counts
     @Published var hasAccess = false
 
+    // живые счётчики, меняются на каждое событие
+    private var liveTotal: Counts
+    private var liveToday: Counts
+    private var displays: [(rect: CGRect, mmPerPoint: Double)] = []
     private var day: String
     private var tap: CFMachPort?
     private var last: CGPoint?
@@ -34,9 +39,15 @@ final class Stats: ObservableObject {
 
     init() {
         // старые ключи без префикса — это общая статистика
-        total = Counts(defaults, "")
+        liveTotal = Counts(defaults, "")
         day = Stats.dayKey()
-        today = defaults.string(forKey: "today.day") == day ? Counts(defaults, "today.") : Counts()
+        liveToday = defaults.string(forKey: "today.day") == day ? Counts(defaults, "today.") : Counts()
+        total = liveTotal
+        today = liveToday
+        loadDisplays()
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.loadDisplays()
+        }
         if !CGPreflightListenEventAccess() { CGRequestListenEventAccess() }
         // ждём, пока дадут доступ к мониторингу ввода
         Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] t in
@@ -44,6 +55,26 @@ final class Stats: ObservableObject {
         }
         _ = startTap()
         Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.save() }
+        let ui = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in self?.publish() }
+        ui.tolerance = 0.2
+        RunLoop.main.add(ui, forMode: .common)
+    }
+
+    private func publish() {
+        if total != liveTotal { total = liveTotal }
+        if today != liveToday { today = liveToday }
+    }
+
+    // размеры дисплеев не меняются, пока не сменится конфигурация экранов
+    private func loadDisplays() {
+        var ids = [CGDirectDisplayID](repeating: 0, count: 16)
+        var n: UInt32 = 0
+        CGGetActiveDisplayList(16, &ids, &n)
+        displays = ids.prefix(Int(n)).compactMap { id in
+            let b = CGDisplayBounds(id)
+            let mm = CGDisplayScreenSize(id).width
+            return b.width > 0 && mm > 0 ? (b, Double(mm / b.width)) : nil
+        }
     }
 
     private static func dayKey() -> String {
@@ -52,17 +83,18 @@ final class Stats: ObservableObject {
     }
 
     func reset() {
-        total = Counts()
-        today = Counts()
+        liveTotal = Counts()
+        liveToday = Counts()
         save()
+        publish()
     }
 
     func save() {
         // новый день — обнуляем сегодняшнюю статистику
         let now = Stats.dayKey()
-        if now != day { day = now; today = Counts() }
-        total.save(defaults, "")
-        today.save(defaults, "today.")
+        if now != day { day = now; liveToday = Counts() }
+        liveTotal.save(defaults, "")
+        liveToday.save(defaults, "today.")
         defaults.set(day, forKey: "today.day")
     }
 
@@ -94,18 +126,18 @@ final class Stats: ObservableObject {
         case .keyDown:
             // автоповтор при зажатой клавише не считаем
             if event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
-                total.keys += 1
-                today.keys += 1
+                liveTotal.keys += 1
+                liveToday.keys += 1
             }
         case .leftMouseDown, .rightMouseDown, .otherMouseDown:
-            total.clicks += 1
-            today.clicks += 1
+            liveTotal.clicks += 1
+            liveToday.clicks += 1
         default:
             let p = event.location
             if let l = last {
                 let d = distance(from: l, to: p)
-                total.meters += d
-                today.meters += d
+                liveTotal.meters += d
+                liveToday.meters += d
             }
             last = p
         }
@@ -113,14 +145,8 @@ final class Stats: ObservableObject {
 
     // переводим точки экрана в миллиметры по физическому размеру дисплея
     private func distance(from a: CGPoint, to b: CGPoint) -> Double {
-        var id: CGDirectDisplayID = 0
-        var count: UInt32 = 0
-        CGGetDisplaysWithPoint(b, 1, &id, &count)
-        guard count > 0 else { return 0 }
-        let mm = CGDisplayScreenSize(id).width
-        let pts = CGDisplayBounds(id).width
-        guard mm > 0, pts > 0 else { return 0 }
-        return Double(hypot(b.x - a.x, b.y - a.y) * mm / pts) / 1000
+        guard let d = displays.first(where: { $0.rect.contains(b) }) else { return 0 }
+        return Double(hypot(b.x - a.x, b.y - a.y)) * d.mmPerPoint / 1000
     }
 }
 
