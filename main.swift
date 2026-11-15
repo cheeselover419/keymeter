@@ -114,7 +114,7 @@ final class Stats: ObservableObject {
         if tap != nil { return true }
         // без доступа tap создаётся, но видит только события своего окна
         guard CGPreflightListenEventAccess() else { return false }
-        let types: [CGEventType] = [.keyDown, .flagsChanged, .leftMouseDown, .rightMouseDown, .otherMouseDown, .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, .scrollWheel]
+        let types: [CGEventType] = [.keyDown, .flagsChanged, .leftMouseDown, .rightMouseDown, .otherMouseDown, .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, .scrollWheel, Stats.systemDefined]
         let mask = types.reduce(CGEventMask(0)) { $0 | (1 << $1.rawValue) }
         guard let port = CGEvent.tapCreate(
             tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly,
@@ -138,6 +138,11 @@ final class Stats: ObservableObject {
         case .keyDown:
             // автоповтор при зажатой клавише не считаем
             if event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
+                liveTotal.keys += 1
+                liveToday.keys += 1
+            }
+        case Stats.systemDefined:
+            if auxKeyPressed(event) {
                 liveTotal.keys += 1
                 liveToday.keys += 1
             }
@@ -172,6 +177,20 @@ final class Stats: ObservableObject {
 
     // модификаторы приходят как flagsChanged и при нажатии, и при отпускании;
     // по биту конкретной клавиши (левой или правой) понимаем, что её нажали
+    // яркость, громкость, медиа и другие клавиши верхнего ряда приходят как NX_SYSDEFINED
+    static let systemDefined = CGEventType(rawValue: 14)!
+
+    private func auxKeyPressed(_ e: CGEvent) -> Bool {
+        // NSEvent попадает в autorelease, а цикл событий может долго его не освобождать
+        autoreleasepool {
+            guard let ns = NSEvent(cgEvent: e), ns.subtype.rawValue == 8 else { return false }
+            let flags = ns.data1 & 0xFFFF
+            let down = (flags & 0xFF00) >> 8 == 0x0A
+            let isRepeat = flags & 0x1 == 1
+            return down && !isRepeat
+        }
+    }
+
     private func modifierPressed(_ e: CGEvent) -> Bool {
         let mask: UInt64
         switch e.getIntegerValueField(.keyboardEventKeycode) {
@@ -211,6 +230,7 @@ struct KeyMeterApp: App {
 
 struct StatsView: View {
     @ObservedObject var stats: Stats
+    @AppStorage("units") private var units = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -279,8 +299,19 @@ struct StatsView: View {
             : String(localized: "\((Double(n) / 1_000_000).formatted(.number.precision(.fractionLength(2))))M")
     }
 
+    // пустая строка — как в региональных настройках системы
+    private var imperial: Bool {
+        units == "imperial" || (units.isEmpty && Locale.current.measurementSystem != .metric)
+    }
+
     private func distance(_ m: Double) -> String {
-        m < 1000
+        if imperial {
+            let ft = m * 3.28084
+            return ft < 5280
+                ? String(localized: "\(ft.formatted(.number.precision(.fractionLength(0)))) ft")
+                : String(localized: "\((m / 1609.344).formatted(.number.precision(.fractionLength(2)))) mi")
+        }
+        return m < 1000
             ? String(localized: "\(m.formatted(.number.precision(.fractionLength(1)))) m")
             : String(localized: "\((m / 1000).formatted(.number.precision(.fractionLength(2)))) km")
     }
@@ -291,6 +322,7 @@ struct SettingsView: View {
     @State private var autostart = SMAppService.mainApp.status == .enabled
     @State private var language = SettingsView.currentLanguage()
     @State private var confirmReset = false
+    @AppStorage("units") private var units = ""
 
     var body: some View {
         Form {
@@ -299,6 +331,11 @@ struct SettingsView: View {
                 Text("System").tag("")
                 Text(verbatim: "English").tag("en")
                 Text(verbatim: "Русский").tag("ru")
+            }
+            Picker("Units", selection: $units) {
+                Text("System").tag("")
+                Text("Metric").tag("metric")
+                Text("Imperial").tag("imperial")
             }
             HStack {
                 Spacer()
