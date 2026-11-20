@@ -4,6 +4,8 @@
 
 A tiny macOS menu bar app. Counts keystrokes, clicks, cursor travel and scrolling in meters.
 
+<img src="docs/panel.gif" width="504" alt="KeyMeter in action">
+
 <img src="docs/panel.png" width="252" alt="Панель KeyMeter"> <img src="docs/panel-en.png" width="252" alt="KeyMeter panel">
 
 
