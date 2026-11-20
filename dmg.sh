@@ -6,13 +6,16 @@ cd "$(dirname "$0")"
 
 VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Info.plist)
 DMG="KeyMeter-$VERSION.dmg"
-VOL="KeyMeter"
+VOL="KeyMeter $VERSION"
 TMP=$(mktemp -d)
 MNT="/Volumes/$VOL"
 trap 'hdiutil detach "$MNT" -quiet 2>/dev/null; rm -rf "$TMP"' EXIT
 
-# если образ с таким именем уже подключён, Finder не найдёт нужное окно
-hdiutil detach "$MNT" -quiet 2>/dev/null || true
+# если том с таким именем уже подключён, ditto и Finder работают со старым томом, поэтому останавливаемся
+if [ -e "$MNT" ]; then
+    echo "том «$VOL» уже подключён, отключите его в Finder и запустите снова" >&2
+    exit 1
+fi
 
 # сначала перезаписываемый образ, чтобы Finder сохранил в нём вид окна
 hdiutil create -volname "$VOL" -size 20m -fs HFS+ -ov "$TMP/rw.dmg" > /dev/null
@@ -53,4 +56,6 @@ sync
 hdiutil detach "$MNT" -quiet
 rm -f "$DMG"
 hdiutil convert "$TMP/rw.dmg" -format UDZO -o "$DMG" > /dev/null
-echo "готово: $(pwd)/$DMG"
+DIRTY=""
+if [ -n "$(git status --porcelain)" ]; then DIRTY=" (есть незакоммиченные изменения)"; fi
+echo "готово: $(pwd)/$DMG, собрано из $(git rev-parse --short HEAD)$DIRTY"
